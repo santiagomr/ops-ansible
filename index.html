@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Ops with Ansible</title>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="src/css/main.css">
+  </head>
+  <body>
+    <textarea id="source">
+
+layout: true
+background-color: #004A82
+
+.right[<img src="src/img/udelar-white.png" height="60px">]
+
+---
+class: center
+
+<br><br>
+# Operar con Ansible
+### (antes de aprender Ansible)
+<br><br><br>
+.right[.note[Encuentro 2019]]
+.right[.note[Red de Unidades Informáticas de la UdelaR en el Interior]]
+
+---
+class: center
+
+<br>
+# Santiago Martínez
+### @santiagomr
+<br>
+<a href="https://github.com/santiagomr"><img src="src/img/github-sq.png" height="100px"></a>
+<a href="https://gitlab.com/santiagomr"><img src="src/img/gitlab-sq.png" height="100px">
+
+---
+
+# Ansible
+
+**Herramienta de software que permite automatizar y orquestar el aprovisionamiento, configuración y despliegue de servidores.**
+
+<br>
+**Ideal para la implementación de proyectos de "infraestructura como código" (IaC).**
+
+<br>
+**Software libre y de código abierto (GPLv3).**
+
+---
+# Ansible
+
+- Es declarativo e idempotente. Receta para llegar a un estado
+
+--
+- Descritivo y fácil de entender (YAML)
+
+--
+- Evita interacción manual con los servidores
+
+--
+- Poco o nada de downtime
+
+--
+- [Módulos](https://docs.ansible.com/ansible/latest/modules/list_of_all_modules.html) para casi todo
+
+--
+- ¡Comunidad! [Ansible Galaxy](https://galaxy.ansible.com)
+
+--
+- Maduro. Versión 2.8 y documentación extensiva
+
+---
+### Requisitos:
+
+--
+### En controlador (desde donde ejecutamos):
+- Llaves SSH
+- Instalar Python
+- Instalar Ansible
+
+--
+
+### En servidores / nodos administrados:
+- Cualquier sistema Linux
+- Instalar Python
+- Configurar login SSH por llaves
+
+---
+## Instalación
+
+Debian, Ubuntu
+```terminal
+$ sudo apt update
+$ sudo apt install software-properties-common
+$ sudo apt-add-repository --yes --update ppa:ansible/ansible
+$ sudo apt install ansible
+```
+
+Fedora
+```terminal
+$ sudo dnf install ansible
+```
+
+RedHat, CentOS
+```terminal
+$ sudo yum install ansible
+```
+
+---
+# ¡Hola mundo!
+Comandos [ad-hoc](https://docs.ansible.com/ansible/latest/user_guide/intro_adhoc.html)
+```terminal
+santiagomr@pc:~$ ansible 192.168.7.21 -m ping
+
+<span style="color:lime;">192.168.7.21 | SUCCESS =&gt; {</span>
+    <span style="color:lime;">&quot;ansible_facts&quot;: {</span>
+        <span style="color:lime;">&quot;discovered_interpreter_python&quot;: &quot;/usr/bin/python&quot;</span>
+    <span style="color:lime;">},</span>
+    <span style="color:lime;">&quot;changed&quot;: false,</span>
+    <span style="color:lime;">&quot;ping&quot;: &quot;pong&quot;</span>
+<span style="color:lime;">}</span>
+```
+
+```terminal
+santiagomr@pc:~$ ansible 192.168.7.21 -a "free -h"
+```
+
+```terminal
+santiagomr@pc:~$ ansible 192.168.7.21 -a "reboot"
+```
+
+---
+## Proyecto tipo
+El objetivo es **operar** código desarrollado por otros.
+
+Partimos entonces de un **proyecto preexistente** y probado.
+
+<br>
+### La estructura típica es similar a:
+.bold[
+```terminal
+                ansible-project/
+                  ├── group_vars/
+                  ├── host_vars/
+                  ├── files/
+                  ├── templates/
+                  ├── roles/
+                  ├── inventory
+                  ├── playbook.yml
+                  ├── ansible.cfg
+                  └── requirements.yml
+```
+]
+
+---
+<br><br><br>
+.center[
+# CONCEPTOS
+# FUNDAMENTALES
+]
+
+---
+# Inventario
+**Archivo que lista y describe hosts y grupos gestionados mediante el proyecto Ansible**
+
+```yaml
+[web_servers]                     # En sintaxis .ini
+first.santiagomr.com
+second.santiagomr.com
+
+[backup_servers]
+123.234.123.234
+
+[cluster1:children]
+web_servers
+backup_servers
+
+[cluster2:children]
+172.16.1.1
+172.16.5.5
+```
+
+---
+# Inventario
+
+```yaml
+---
+all:                                  # En sintaxis .yaml
+  hosts:
+    first.santiagomr.com:
+  children:
+    cluster1:
+      children:
+        web_servers:
+          hosts:
+            first.santiagomr.com:
+            second.santiagomr.com:
+        backup_servers:
+          hosts:
+            123.234.123.234:
+    cluster2:
+      hosts:
+        172.16.1.1:
+        172.16.5.5:
+```
+
+---
+# Playbook
+**Es el lenguaje mediante el cual Ansible organiza, configura, administra y/o despliega sistemas.**
+
+<br>
+**Consiste de un archivo donde se secuencia las estructuras y módulos Ansible a invocar.**
+
+<br>
+**Un `playbook` es una lista de `plays`. Puede haber uno o varios `plays` dentro de un `playbook`.**
+
+---
+# Plays
+
+<br>
+**Un `play` es básicamente una relación entre un host o grupo de hosts y las `vars`, `tasks`, `roles`, `handlers`, `users`, (...) que intervendrán en ellos para alcanzar el estado deseado.**
+
+---
+```yaml
+- name: Play de ejemplo
+  hosts: all
+  remote_user: santiagomr
+  become: true
+  become_user: root
+  become_method: sudo
+  gather_facts: yes
+
+  vars:
+    mi_servidor_http: "apache2"
+
+  tasks:
+    - name: Instalar mi servidor HTTP
+      apt:
+        name: "{{ mi_servidor_http }}"
+        state: present
+        update_cache: yes
+      tags: apt_http_server
+      when: ansible_distribution == "Debian"
+
+  roles:
+    - role: nextcloud
+      when: inventory_hostname in groups.nubes
+```
+
+---
+# Módulos
+
+**Son las unidades mínimas de trabajo a aplicar sobre los nodos remotos. Incluidos en el *core* Ansible.**
+
+<br>
+```yaml
+  - name: Crear un enlace simbólico con módulo "file"
+    file:
+      src: /archivo/a/enlazar
+      dest: /ruta/al/enlace
+      owner: foo
+      group: foo
+      state: link
+```
+
+---
+# Tareas
+**Un módulo y sus parámetros agrupados bajo un nombre. Opcionalmente, también condicionales y bucles.**
+
+<br>
+```yaml
+  - name: Install Apache (on Debian)        # Nombre de la tarea
+    apt:                                    # Módulo
+      name: apache2                         # Parámetro
+      state: latest                         # Parámetro
+      update_cache: yes                     # Parámetro
+      cache_valid_time: 3600                # Parámetro
+    when: ansible_distribution == "Debian"  # Condicional
+```
+
+---
+# Facts
+
+**Son valores "descubiertos" automáticamente por Ansible al ejecutarse sobre los nodos remotos (a menos que se indique gather_facts: no).**
+
+<br>
+**Incluyen información del ambiente de los nodos, como familia y versión de sistema operativo, configuración de red, etc.**
+
+<br>
+**Se pueden invocar desde cualquier lugar del proyecto.**
+
+---
+# Facts
+
+```terminal
+santiagomr@pc:~$ ansible localhost -m setup
+
+<span style="color:lime;">localhost | SUCCESS => {</span>
+    <span style="color:lime;">"ansible_facts": {</span>
+        <span style="color:lime;">"ansible_all_ipv4_addresses": [</span>
+            <span style="color:lime;">"172.17.0.1",</span>
+            <span style="color:lime;">"192.168.1.114",</span>
+        <span style="color:lime;">],</span>
+        (...),
+        <span style="color:lime;">"ansible_os_family": "Debian",</span>
+        <span style="color:lime;">"ansible_distribution_release": "buster",</span>
+        (...),
+
+```
+
+---
+# Variables
+
+**Nombre asignado a valores (enteros, booleanos, strings), en estructuras simples, de lista o de diccionario.**
+
+<br>
+**Las variables pueden ser invocadas desde muchos contextos del proyecto, como playbooks y templates.**
+
+<br>
+**A diferencia de las `facts`, las variables son valores declarados, no inferidos del sistema local o remoto.**
+
+---
+# Variables
+
+```yaml
+---
+variable_booleana: true
+
+variable_string: "hello world!"
+
+lista_simple:
+  - item1
+  - item2
+  - item3
+
+diccionario:
+  servidor1:
+    ip: 192.168.0.10
+    mask: 24
+  servidor2:
+    ip: 192.168.0.20
+    mask: 24
+```
+
+---
+# Vaults
+
+**Son archivos de variables yaml, que adicionalmente se cifran en base a una contraseña.**
+
+<br>
+**Ansible otorga las herramientas para descifrar, consultar y utilizar los valores cómodamente.**
+
+<br>
+**Así se protegen datos sensibles registrados en código del proyecto, como contraseñas o tokens de acceso a servicios.**
+
+---
+# Vaults
+
+```terminal
+santiagomr@pc:~$ cat host_vars/foo.com/vault/main.yml
+$ANSIBLE_VAULT;1.1;AES256
+6366306236303839356331643638636632346232306
+6661333265626361383830303431313339616266383
+6161623832663830303530643832363266323837333
+3265393337646239656536373138646239386265363
+3339376633613766613164353661343764306539663
+3436333539383235353963353563613130343235616
+6562636138383030656263613838303065626361383
+```
+
+```terminal
+santiagomr@pc:~$ ansible-vault view host_vars/foo.com/vault/main.yml
+---
+foo_password: 1234321
+```
+
+
+---
+# Precedencia de variables
+(De mayor a menor precedencia)
+
+- Task vars
+- Role vars
+- Host vars
+- Group vars
+- Role defaults
+- Command line values
+
+---
+# Files
+
+<br>
+**Archivos de cualquier tipo y formato. Pueden transferirse inmutables a los servidores deseados a través del canal SSH.**
+
+```yaml
+- name: Copiar archivo de imagen PNG a servidor
+  copy:
+    src: ansible_logo.png
+    dest: /var/www/html/logo.png
+    owner: www-data
+    group: www-data
+    mode: 0644
+```
+
+---
+# Templates
+
+<br>
+**Permiten transferir archivos de texto fácilmente a servidores remotos, con el agregado de poder construirlos a partir de variables del proyecto.**
+
+<br>
+**Usan el motor de plantillas Jinja2 y también pueden incluir construcciones lógicas como bucles y sentencias condicionales.**
+
+---
+# Templates
+
+```yaml
+  - name: Establecer storages a exportar
+    template:
+      src: exports.j2
+      dest: /etc/exports
+```
+```jinja
+{% if exports is defined %}
+
+  {% for export in exports %}
+
+    {{ export.path }}
+
+      {% for network in export.networks %}
+
+        {{ network }}({{ export.parameters }})
+
+      {% endfor %}
+
+  {% endfor %}
+
+{% endif %}
+```
+
+---
+# Handlers
+
+<br>
+**Son como las tareas normales de un `play`, con la diferencia de que solo se ejecutan si otra tarea le "notifica" que cambió algo.**
+
+<br>
+**Usarlos para reiniciar servicios es lo más habitual, pero no estan limitados solo a eso.**
+
+---
+# Handlers
+
+```yaml
+  - name: Configure nginx as reverse proxy for Synapse
+    template:
+      src: etc/nginx/sites-available/reverse_proxy.j2
+      dest: /etc/nginx/sites-available/reverse_proxy.conf
+      mode: 0644
+      owner: root
+      group: root
+    notify: restart nginx
+```
+
+```yaml
+  - name: restart nginx
+    service:
+      name: nginx
+      state: restarted
+```
+
+---
+# Roles
+
+**Los roles son "paquetes" de variables, tareas, templates, handlers, (...) que se aplican sobre un grupo de hosts para llegar a un estado específico, típicamente un servicio (Por ej. servidor NextCloud).**
+
+<br>
+**Debido a su estructura, se convierte en una unidad redistribuible agnóstica del entorno. Para casi todo lo que precisemos hacer, hay un role en la [*Galaxia*](https://galaxy.ansible.com) que ya lo resuelve.**
+
+
+
+
+---
+# Roles
+
+### Estructura típica:
+
+.bold[
+```terminal
+            role/
+              ├── defaults/
+              │   └── main.yml
+              ├── files/
+              ├── handlers/
+              │   └── main.yml
+              ├── meta/
+              │   └── main.yml
+              ├── README.md
+              ├── tasks/
+              │   └── main.yml
+              ├── templates/
+              └── vars/
+                  └── main.yml
+```
+]
+
+---
+# Tags
+
+<br>
+**Permiten etiquetar recursos de un `playbook` con palabras clave arbitrarias.**
+
+<br>
+**El objetivo es poder ejecutar luego, solo los recursos que correspondan a uno o varios `tags`. O por oposición, todo menos lo que coincida con esos `tags`.**
+
+---
+# Tags
+
+```yaml
+   # Playbook site.yml
+- name: Crear contenedores LXC Proxmox
+  hosts: contenedores_proxmox
+
+  roles:
+    - role: udelarinterior.proxmox_create_lxc
+      tags: lxc_pve
+
+    - role: udelarinterior.firewall_proxmox
+      tags: fw_pve
+```
+
+```yaml
+  # Ejecutar solo lo etiquetado "fw_pve"
+$ ansible-playbook site.yml --tags fw_pve
+
+  # Ejecutar todo menos lo etiquetado "fw_pve"
+$ ansible-playbook site.yml --skip-tags fw_pve
+```
+
+
+
+
+---
+class: center
+
+<br><br>
+
+# DEMO
+
+<br>
+### [PROYECTO DE EJEMPLO](https://github.com/santiagomr/baseproject-ansible)
+
+    </textarea>
+
+    <!-- <script src="src/js/remark.min.js"></script> -->
+    <script src="https://remarkjs.com/downloads/remark-latest.min.js">
+
+    <script>
+      var slideshow = remark.create({
+          // Set the slideshow display ratio
+          // Default: '4:3'
+          // Alternatives: '16:9', ...
+          ratio: '4:3',
+
+          // Navigation options
+          navigation: {
+            // Enable or disable navigating using scroll
+            // Default: true
+            // Alternatives: false
+            scroll: true,
+
+            // Enable or disable navigation using touch
+            // Default: true
+            // Alternatives: false
+            touch: true,
+
+            // Enable or disable navigation using click
+            // Default: false
+            // Alternatives: true
+            click: false,
+          },
+        // Customize slide number label, either using a format string..
+        slideNumberFormat: 'Slide %current% of %total%',
+        // .. or by using a format function
+        slideNumberFormat: function (current, total) {
+          return 'Slide ' + current + ' of ' + total;
+        },
+
+        // Enable or disable counting of incremental slides in the slide counting
+        countIncrementalSlides: true,
+
+        // Provide a source markdown for slides explicitly as an option
+        // instead of the textarea with id="source"
+        // Default: undefined
+        // Alternatives: 'Slide 1\n---\nSlide 2', ...
+        source: undefined,
+
+        // Read source markdown for slides from URL (local or external) instead
+        // of the textarea with id="source"
+        // Default: undefined
+        // Alternatives: 'some_file.md', 'https://example.host.com/file.md', ...
+        sourceUrl: undefined,
+
+        highlightStyle: 'github',
+      });
+    </script>
+
+    <script type="text/javascript">
+      var hljs = remark.highlighter.engine;
+    </script>
+
+    <script src="src/js/terminal.language.js" type="text/javascript"></script>
+
+    <script type="text/javascript">
+      var slideshow = remark.create({
+        highlightStyle: 'monokai'
+      });
+      // extract the embedded styling from ansi spans
+      var highlighted = document.querySelectorAll("code.terminal span.hljs-ansi");
+      Array.prototype.forEach.call(highlighted, function(next) {
+        next.insertAdjacentHTML("beforebegin", next.textContent);
+        next.parentNode.removeChild(next);
+      });
+    </script>
+
+  </body>
+</html>
